@@ -20,31 +20,17 @@ and accelerate analytics and data engineering projects.
 
 ## Structure
 
-### plots/
-Generic plotting utilities that:
-- Accept a pandas DataFrame
-- Do not assume column names
-- Provide safe defaults
-- Allow optional customization
+### core/
+Foundational building blocks shared across the library.
 
-### eda/
-Reusable exploratory data analysis helpers:
-- Summary statistics
-- Null analysis
-- Column profiling
+### quality/
+Lightweight, reusable data quality components.
 
-### validation/
-Lightweight data quality components:
-- Schema validation
-- Duplicate detection
-- Missing value checks
-- Type validation
+### visualization/
+Generic plotting utilities.- Schema validation
 
-### utils/
-Common utilities used across projects:
-- Logging setup
-- Config loaders
-- Reusable helpers
+### transform//
+Reusable transformation components.
 
 ---
 
