@@ -1,42 +1,79 @@
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
-from typing import Optional, Any
 import psycopg2
 from psycopg2 import sql
+from pathlib import Path
+from typing import Optional, Dict, Any, List, Union
 
 def execute_sql_query(
     sql_file_path: str,
     engine: Engine,
-    fetch_one: bool = False
-) -> Optional[Any]:
+    identifiers: Optional[Dict[str, str]] = None,
+    params: Optional[Dict[str, Any]] = None,
+    fetch: Optional[str] = None,
+) -> Optional[Union[Dict[str, Any], List[Dict[str, Any]]]]:
     """
     Execute a SQL file using a SQLAlchemy engine.
+
+    Supports:
+    - Optional identifier replacement (e.g., table/schema names)
+    - Optional bound parameters
+    - Fetching first row, all rows, or no result
 
     Parameters
     ----------
     sql_file_path : str
-        Path to a .sql file containing the query.
+        Path to the .sql file.
     engine : sqlalchemy.engine.Engine
         Active SQLAlchemy engine instance.
-    fetch_one : bool, default False
-        If True, returns the first row of the result.
+    identifiers : dict, optional
+        Dictionary of placeholders for identifiers (e.g., schema, table names).
+    params : dict, optional
+        Bound query parameters for safe execution.
+    fetch : {"one", "all", None}, optional
+        - "one": returns first row as a dict
+        - "all": returns all rows as list of dicts
+        - None: returns None
 
     Returns
     -------
-    Optional[Any]
-        First row of result if fetch_one=True, otherwise None.
+    dict or list of dict or None
+        Query results depending on `fetch` option.
+
+    Examples
+    --------
+    # Fetch single row
+    row = execute_sql_query("query.sql", engine, fetch="one")
+
+    # Fetch all rows
+    rows = execute_sql_query("query.sql", engine, fetch="all")
+
+    # With bound parameters and identifier substitution
+    rows = execute_sql_query(
+        "query.sql",
+        engine,
+        identifiers={"schema": "staging", "table": "users"},
+        params={"start_date": "2024-01-01"},
+        fetch="all"
+    )
     """
 
+    sql_text = Path(sql_file_path).read_text()
+
+    # Replace identifiers in SQL
+    if identifiers:
+        for key, value in identifiers.items():
+            sql_text = sql_text.replace(f"{{{{ {key} }}}}", str(value))
+
     with engine.begin() as conn:
-        with open(sql_file_path, "r") as f:
-            query = f.read()
+        result = conn.execute(text(sql_text), params or {})
 
-        result = conn.execute(text(query))
+        if fetch == "one":
+            return result.mappings().first()
+        elif fetch == "all":
+            return result.mappings().all()
 
-        if fetch_one:
-            return result.fetchone()
-
-        return None
+    return None
 
 
 def copy_csv_to_postgres(
