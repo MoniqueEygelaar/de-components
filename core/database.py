@@ -4,6 +4,7 @@ import psycopg2
 from psycopg2 import sql
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Union
+import pandas as pd
 
 def execute_sql_query(
     sql_file_path: str,
@@ -39,23 +40,6 @@ def execute_sql_query(
     -------
     dict or list of dict or None
         Query results depending on `fetch` option.
-
-    Examples
-    --------
-    # Fetch single row
-    row = execute_sql_query("query.sql", engine, fetch="one")
-
-    # Fetch all rows
-    rows = execute_sql_query("query.sql", engine, fetch="all")
-
-    # With bound parameters and identifier substitution
-    rows = execute_sql_query(
-        "query.sql",
-        engine,
-        identifiers={"schema": "staging", "table": "users"},
-        params={"start_date": "2024-01-01"},
-        fetch="all"
-    )
     """
 
     sql_text = Path(sql_file_path).read_text()
@@ -121,3 +105,95 @@ def copy_csv_to_postgres(
     conn.commit()
     cursor.close()
     conn.close()
+
+from sqlalchemy import inspect
+from sqlalchemy.engine import Engine
+
+
+def table_exists(engine: Engine, table_name: str, schema: str = "public") -> bool:
+    """
+    Check if a table exists in the database.
+
+    Parameters
+    ----------
+    engine : sqlalchemy.engine.Engine
+        Active SQLAlchemy engine instance.
+    table_name : str
+        Name of the table to check.
+    schema : str, default "public"
+        Schema name where the table should exist.
+
+    Returns
+    -------
+    bool
+        True if the table exists, False otherwise.
+    """
+    inspector = inspect(engine)
+    return inspector.has_table(table_name, schema=schema)
+
+
+def fetch_table(engine: Engine, table_name: str, schema: str = "public") -> pd.DataFrame:
+    """
+    Load an entire table from the database into a pandas DataFrame.
+
+    Parameters
+    ----------
+    engine : sqlalchemy.engine.Engine
+        Active SQLAlchemy engine instance.
+    table_name : str
+        Table name to fetch.
+    schema : str, default "public"
+        Schema name where the table resides.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame containing all rows from the table.
+
+    Raises
+    ------
+    ValueError
+        If the table does not exist.
+"""
+    if not table_exists(engine, table_name, schema):
+        raise ValueError(f"Table '{schema}.{table_name}' does not exist.")
+
+    query = f'SELECT * FROM "{schema}"."{table_name}"'
+    return pd.read_sql(query, engine)
+
+
+def bulk_insert_dataframe(
+    df: pd.DataFrame,
+    engine: Engine,
+    table_name: str,
+    schema: str = "public",
+    if_exists: str = "append"
+) -> None:
+    """
+    Insert a pandas DataFrame into a database table using SQLAlchemy.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        DataFrame to insert.
+    engine : sqlalchemy.engine.Engine
+        Active SQLAlchemy engine instance.
+    table_name : str
+        Target table name.
+    schema : str, default "public"
+        Target schema name.
+    if_exists : {"fail", "replace", "append"}, default "append"
+        Behavior when the table already exists.
+
+    Returns
+    -------
+    None
+    """
+    df.to_sql(
+        name=table_name,
+        con=engine,
+        schema=schema,
+        if_exists=if_exists,
+        index=False,
+        method="multi"  
+    )
