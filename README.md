@@ -29,7 +29,7 @@ Lightweight, reusable data quality components.
 ### visualization/
 Generic plotting utilities.- Schema validation
 
-### transform//
+### transform/
 Reusable transformation components.
 
 ---
@@ -49,7 +49,7 @@ It is a growing engineering toolkit.
 
 ---
 
-## 🛠 Example
+## Example
 
 ```python
 from de_components.plots import create_line_plot
