@@ -1,4 +1,4 @@
-from sqlalchemy import text
+from sqlalchemy import text, inspect
 from sqlalchemy.engine import Engine
 import psycopg2
 from psycopg2 import sql
@@ -92,23 +92,28 @@ def copy_csv_to_postgres(
     conn = psycopg2.connect(**connection_params)
     cursor = conn.cursor()
 
-    with open(csv_file_path, "r", encoding="utf-8") as f:
-        cursor.copy_expert(
-            sql.SQL(f"""
-                COPY {schema}.{table_name}
-                FROM STDIN
-                WITH CSV HEADER DELIMITER ',';
-            """),
-            f
-        )
+    try:
+        with open(csv_file_path, "r", encoding="utf-8") as f:
+            cursor.copy_expert(
+                sql.SQL("""
+                    COPY {}.{}
+                    FROM STDIN
+                    WITH CSV HEADER DELIMITER ','
+                """).format(
+                    sql.Identifier(schema),
+                    sql.Identifier(table_name)
+                ),
+                f
+            )
+        conn.commit()
 
-    conn.commit()
-    cursor.close()
-    conn.close()
+    except Exception as e:
+        conn.rollback()
+        raise e
 
-from sqlalchemy import inspect
-from sqlalchemy.engine import Engine
-
+    finally:
+        cursor.close()
+        conn.close()
 
 def table_exists(engine: Engine, table_name: str, schema: str = "public") -> bool:
     """
@@ -197,3 +202,11 @@ def bulk_insert_dataframe(
         index=False,
         method="multi"  
     )
+
+def parquet_to_postgres(parquet_path, table_name, connection_params):
+    temp_csv = "temp_file.csv"
+
+    df = pd.read_parquet(parquet_path)
+    df.to_csv(temp_csv, index=False)
+
+    copy_csv_to_postgres(temp_csv, table_name, connection_params)
